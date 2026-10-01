@@ -1,6 +1,7 @@
 import requests
 
 response = requests.post(
+    # ollama测试
     "http://127.0.0.1:11434/api/chat",
     json={
         "model": "qwen2.5:7b",
