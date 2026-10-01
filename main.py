@@ -4,7 +4,6 @@ from pydantic import BaseModel
 
 app = FastAPI()
 
-
 # 数据库连接信息，填你Dify容器PG的地址账号
 DB_CONFIG = {
     "host": "127.0.0.1",
@@ -70,4 +69,3 @@ if __name__ == "__main__":
     import uvicorn
     # host改成0.0.0.0
     uvicorn.run("main:app", host="0.0.0.0", port=6100, reload=True)
-
