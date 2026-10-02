@@ -25,6 +25,7 @@ def parse_sensor_value(name: str, value: str) -> float | None:
         return None
     try:
         result = float(value)
+        
     except ValueError as error:
         raise HTTPException(status_code=422, detail=f"{name} 必须是数字") from error
     if not math.isfinite(result):
