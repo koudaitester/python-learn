@@ -42,7 +42,7 @@ def create_inbound(item: InboundItem):
 
 # 查询接口
 @app.get("/query")
-def query_goods(货架号:str=None, 商品名:str=None):
+def query_goods(货架号: str | None = None, 商品名: str | None = None):
     print(f"test query 1---------")
     conn = psycopg2.connect(**DB_CONFIG)
     print(f"test query 2---------")
