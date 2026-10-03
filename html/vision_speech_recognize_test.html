@@ -1,0 +1,115 @@
+<!DOCTYPE html>
+<html>
+<body>
+<meta charset="UTF-8">
+<video id="cam" autoplay playsinline style="width:400px;"></video>
+<canvas id="snapCanvas" style="display:none;"></canvas>
+<div>
+    
+  <h3>环境评估结果</h3>
+  <pre id="result"></pre>
+  <br>
+  <button id="speakBtn" style="padding:10px;">按住对话（环境问答）</button>
+  <div>识别文字：<span id="speechText"></span></div>
+</div>
+
+<script>
+const video = document.getElementById('cam');
+const canvas = document.getElementById('snapCanvas');
+const ctx = canvas.getContext('2d');
+const resultDom = document.getElementById('result');
+const speechTextDom = document.getElementById('speechText');
+const speakBtn = document.getElementById('speakBtn');
+
+const INTERVAL_MS = 10000; // 10秒自动巡检
+let isRunning = false;
+
+// 摄像头初始化
+navigator.mediaDevices.getUserMedia({video:{facingMode:'environment'}})
+.then(stream=>{
+  video.srcObject = stream;
+  startLoop();
+})
+.catch(err=>{
+  console.error("摄像头打开失败",err);
+  resultDom.innerText = "摄像头错误：" + err;
+})
+
+// 10秒自动巡检（原有画面分析逻辑）
+async function startLoop(){
+  if(isRunning) return;
+  isRunning = true;
+  try{
+    const blob = await captureFrameBlob();
+    const formData = new FormData();
+    formData.append("image", blob, "capture.jpg");
+    formData.append("temperature", "22");
+    formData.append("humidity", "38");
+
+    const resp = await fetch("http://127.0.0.1:6100/analyze",{
+      method:"POST",
+      body: formData
+    })
+    const data = await resp.json();
+    resultDom.innerText = JSON.stringify(data,null,2);
+  } catch(e) {
+    resultDom.innerText = "请求异常：" + e.toString();
+  } finally {
+    isRunning = false;
+    setTimeout(startLoop, INTERVAL_MS);
+  }
+}
+
+// 封装：截取当前画面返回Blob，自动巡检和语音对话共用
+async function captureFrameBlob(){
+  canvas.width = video.videoWidth;
+  canvas.height = video.videoHeight;
+  ctx.drawImage(video,0,0);
+  const imgBase64 = canvas.toDataURL('image/jpeg',0.8);
+  const res = await fetch(imgBase64);
+  return await res.blob();
+}
+
+// ========== 语音识别模块 ==========
+const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+const recognition = new SpeechRecognition();
+recognition.continuous = false;
+recognition.interimResults = false;
+
+speakBtn.onmousedown = ()=>{
+  recognition.start();
+  speakBtn.innerText="正在听..."
+}
+speakBtn.onmouseup = ()=>{
+  recognition.stop();
+  speakBtn.innerText="按住对话（环境问答）"
+}
+
+recognition.onresult = async (event)=>{
+  const userText = event.results[0][0].transcript;
+  speechTextDom.innerText = userText;
+  // 拿当前截图 + 用户提问，提交给后端对话接口
+  const blob = await captureFrameBlob();
+  const formData = new FormData();
+  formData.append("image", blob, "capture.jpg");
+  formData.append("temperature", "22");
+  formData.append("humidity", "38");
+  formData.append("query", userText); // 新增：用户语音转文字提问
+
+  try{
+    const resp = await fetch("http://127.0.0.1:6100/chat_with_env",{
+      method:"POST",
+      body: formData
+    })
+    const data = await resp.json();
+    resultDom.innerText = JSON.stringify(data,null,2);
+  }catch(e){
+    resultDom.innerText = "对话请求异常："+e
+  }
+}
+recognition.onerror = (err)=>{
+  speechTextDom.innerText = "语音识别失败:"+err
+}
+</script>
+</body>
+</html>

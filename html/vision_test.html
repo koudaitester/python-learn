@@ -2,7 +2,6 @@
 <html>
 <body>
 <video id="cam" autoplay playsinline style="width:400px;"></video>
-<!-- 定格画面容器 -->
 <canvas id="snapCanvas" style="display:none;"></canvas>
 <div>
   <h3>环境评估结果</h3>
@@ -14,34 +13,49 @@ const video = document.getElementById('cam');
 const canvas = document.getElementById('snapCanvas');
 const ctx = canvas.getContext('2d');
 const resultDom = document.getElementById('result');
+const INTERVAL_MS = 5000; // 5秒一轮
+let isRunning = false;
 
-// 打开摄像头
 navigator.mediaDevices.getUserMedia({video:{facingMode:'environment'}})
 .then(stream=>{
   video.srcObject = stream;
+  startLoop();
+})
+.catch(err=>{
+  console.error("摄像头打开失败",err);
+  resultDom.innerText = "摄像头错误：" + err;
 })
 
-// 定时器：每3秒截帧一次
-setInterval(async ()=>{
-  canvas.width = video.videoWidth;
-  canvas.height = video.videoHeight;
-  ctx.drawImage(video,0,0);
-  // 转base64
-  const imgBase64 = canvas.toDataURL('image/jpeg');
-  // 调用你的后端接口
-  const res = await fetch("http://127.0.0.1:8000/analyze",{
-    method:"POST",
-    headers:{"Content-Type":"application/json"},
-    body:JSON.stringify({
-      image_base64: imgBase64,
-      temp: 24.0,
-      humidity: 48
+async function startLoop(){
+  if(isRunning) return;
+  isRunning = true;
+  try{
+    canvas.width = video.videoWidth;
+    canvas.height = video.videoHeight;
+    ctx.drawImage(video,0,0);
+    const imgBase64 = canvas.toDataURL('image/jpeg',0.8);
+    const res = await fetch(imgBase64);
+    const blob = await res.blob();
+
+    const formData = new FormData();
+    formData.append("image", blob, "capture.jpg");
+    formData.append("temperature", "22");
+    formData.append("humidity", "38");
+
+    const resp = await fetch("http://127.0.0.1:6100/analyze",{
+      method:"POST",
+      body: formData
+      // 不要写 headers:{"Content-Type":"multipart/form-data"}
     })
-  })
-  const data = await res.json();
-  resultDom.innerText = JSON.stringify(data,null,2);
-  // 如果后端返回风险标记，在这里写画面定格逻辑
-},3000)
+    const data = await resp.json();
+    resultDom.innerText = JSON.stringify(data,null,2);
+  } catch(e) {
+    resultDom.innerText = "请求异常：" + e.toString();
+  } finally {
+    isRunning = false;
+    setTimeout(startLoop, INTERVAL_MS);
+  }
+}
 </script>
 </body>
 </html>
