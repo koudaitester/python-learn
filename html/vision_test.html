@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html>
+<body>
+<video id="cam" autoplay playsinline style="width:400px;"></video>
+<!-- 定格画面容器 -->
+<canvas id="snapCanvas" style="display:none;"></canvas>
+<div>
+  <h3>环境评估结果</h3>
+  <pre id="result"></pre>
+</div>
+
+<script>
+const video = document.getElementById('cam');
+const canvas = document.getElementById('snapCanvas');
+const ctx = canvas.getContext('2d');
+const resultDom = document.getElementById('result');
+
+// 打开摄像头
+navigator.mediaDevices.getUserMedia({video:{facingMode:'environment'}})
+.then(stream=>{
+  video.srcObject = stream;
+})
+
+// 定时器：每3秒截帧一次
+setInterval(async ()=>{
+  canvas.width = video.videoWidth;
+  canvas.height = video.videoHeight;
+  ctx.drawImage(video,0,0);
+  // 转base64
+  const imgBase64 = canvas.toDataURL('image/jpeg');
+  // 调用你的后端接口
+  const res = await fetch("http://127.0.0.1:8000/analyze",{
+    method:"POST",
+    headers:{"Content-Type":"application/json"},
+    body:JSON.stringify({
+      image_base64: imgBase64,
+      temp: 24.0,
+      humidity: 48
+    })
+  })
+  const data = await res.json();
+  resultDom.innerText = JSON.stringify(data,null,2);
+  // 如果后端返回风险标记，在这里写画面定格逻辑
+},3000)
+</script>
+</body>
+</html>
