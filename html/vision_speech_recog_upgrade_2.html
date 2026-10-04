@@ -1,0 +1,145 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<title>人居微环境检测</title>
+</head>
+<body>
+<video id="cam" autoplay playsinline style="width:400px;"></video>
+<canvas id="snapCanvas" style="display:none;"></canvas>
+<div>
+<h3>环境评估结果</h3>
+<pre id="result"></pre>
+<br>
+<button id="speakBtn" style="padding:10px;">按住对话（环境问答）</button>
+<div>识别文字：<span id="speechText"></span></div>
+</div>
+<script>
+const video = document.getElementById('cam');
+const canvas = document.getElementById('snapCanvas');
+const ctx = canvas.getContext('2d');
+const resultDom = document.getElementById('result');
+const speechTextDom = document.getElementById('speechText');
+const speakBtn = document.getElementById('speakBtn');
+const INTERVAL_MS = 10000;
+let isRequestBusy = false; //全局请求锁，防止并发排队
+let autoLoopActive = true;
+
+// 摄像头初始化
+navigator.mediaDevices.getUserMedia({video:{facingMode:'environment'}})
+.then(stream=>{
+video.srcObject = stream;
+startLoop();
+})
+.catch(err=>{
+console.error(err);
+resultDom.innerText = "摄像头授权失败，请检查浏览器/系统权限";
+})
+
+// 自动巡检循环
+async function startLoop(){
+if(!autoLoopActive || isRequestBusy) {
+setTimeout(startLoop, INTERVAL_MS);
+return;
+}
+isRequestBusy = true;
+try{
+const blob = await captureFrameBlob();
+const formData = new FormData();
+formData.append("image", blob, "capture.jpg");
+formData.append("temperature", "22");
+formData.append("humidity", "38");
+const resp = await fetch("http://127.0.0.1:6100/analyze",{
+method:"POST",
+body: formData
+})
+const data = await resp.json();
+resultDom.innerText = JSON.stringify(data,null,2);
+} catch(e) {
+resultDom.innerText = "请求异常：" + e.toString();
+} finally {
+isRequestBusy = false;
+setTimeout(startLoop, INTERVAL_MS);
+}
+}
+
+// ========== 图片压缩函数，长边640，质量0.4 ==========
+async function captureFrameBlob(){
+const maxSide = 640;
+let w = video.videoWidth;
+let h = video.videoHeight;
+// 等比例缩放长边
+if (w > h) {
+if(w > maxSide){
+h = h * maxSide / w;
+w = maxSide;
+}
+}else{
+if(h > maxSide){
+w = w * maxSide / h;
+h = maxSide;
+}
+}
+canvas.width = w;
+canvas.height = h;
+ctx.drawImage(video, 0, 0, w, h);
+const imgBase64 = canvas.toDataURL('image/jpeg', 0.4);
+const res = await fetch(imgBase64);
+return await res.blob();
+}
+
+// 语音识别，原有长按交互保持原样
+const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+const recognition = new SpeechRecognition();
+recognition.continuous = false;
+recognition.interimResults = false;
+
+speakBtn.onmousedown = ()=>{
+autoLoopActive = false;
+recognition.start();
+speakBtn.innerText="正在听...松开发送";
+speechTextDom.innerText = "";
+}
+
+speakBtn.onmouseup = async ()=>{
+recognition.stop();
+speakBtn.innerText="按住对话（环境问答）";
+}
+
+recognition.onresult = async (event)=>{
+if(isRequestBusy){
+resultDom.innerText="模型正在处理，请稍后提问";
+autoLoopActive = true;
+return;
+}
+isRequestBusy = true;
+const userText = event.results[0][0].transcript;
+speechTextDom.innerText = userText;
+try{
+const blob = await captureFrameBlob();
+const formData = new FormData();
+formData.append("image", blob, "capture.jpg");
+formData.append("temperature", "22");
+formData.append("humidity", "38");
+formData.append("query", userText);
+const resp = await fetch("http://127.0.0.1:6100/chat_with_env",{
+method:"POST",
+body: formData
+})
+const data = await resp.json();
+resultDom.innerText = JSON.stringify(data,null,2);
+}catch(e){
+resultDom.innerText = "对话请求异常："+e
+} finally {
+isRequestBusy = false;
+autoLoopActive = true;
+}
+}
+
+recognition.onerror = (err)=>{
+speechTextDom.innerText = "语音识别失败:"+err
+autoLoopActive = true;
+}
+</script>
+</body>
+</html>

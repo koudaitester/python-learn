@@ -38,6 +38,7 @@ navigator.mediaDevices.getUserMedia({video:{facingMode:'environment'}})
   resultDom.innerText = "摄像头授权失败，请检查浏览器/系统权限";
 })
 
+
 // 自动巡检
 async function startLoop(){
   if(!autoLoopActive || isRequestBusy) {
@@ -65,6 +66,7 @@ async function startLoop(){
     setTimeout(startLoop, INTERVAL_MS);
   }
 }
+
 
 // ==========【仅压缩图片，其余逻辑不变】==========
 async function captureFrameBlob(){
