@@ -14,8 +14,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from langchain_community.document_loaders import TextLoader
 from langchain_text_splitters import MarkdownHeaderTextSplitter
-from langchain_community.embeddings import HuggingFaceEmbeddings
-
+from langchain_huggingface import HuggingFaceEmbeddings
 from langchain_chroma import Chroma
 import os
 
@@ -98,6 +97,25 @@ def parse_sensor_value(name: str, value: str) -> float | None:
 #     result_text = data["data"]["outputs"]["answer"]
 #     return result_text
 
+# 4. 检索函数：输入查询文本，返回topN相关知识库片段
+def retrieve_knowledge(query: str, top_k=2) -> str:
+    docs = vector_db.similarity_search(query, k=top_k)
+    context = "\n\n".join([f"【场景片段】{doc.page_content}" for doc in docs])
+    return context
+
+# 5. 组装Prompt，传给LLaVA
+def build_llava_prompt(user_input: str, image_desc: str):
+    knowledge_context = retrieve_knowledge(user_input)
+    prompt = f"""
+下面是参考知识库规则：
+{knowledge_context}
+
+根据上面的规则，分析图片信息：{image_desc}
+输出简短结论，判断环境是否存在风险，并给出对应的整改建议。
+要求：简洁直接，不要多余描述。
+"""
+    return prompt
+
 @app.post("/chat_with_env")
 async def chat_with_environment(
 
@@ -134,9 +152,12 @@ async def chat_with_environment(
     # 请根据图片内容和问题，以及知识库信息{report}，用简短中文输出结论和建议，不要添加多余说明。
     # """
 
-    prompt = f""""你是程序员的小助手，根据用户的问题:{query}。
-        请根据图片内容和问题,用简短中文输出结论和建议，不要添加多余说明。
-        """
+    # prompt = f""""你是程序员的小助手，根据用户的问题:{query}。
+    #     请根据图片内容和问题,用简短中文输出结论和建议，不要添加多余说明。
+    #     """
+
+    #添加知识库版prompt
+    prompt = build_llava_prompt(query, f"温度 {temperature_text}；相对湿度 {humidity_text}")    
     
     payload = {
         "model": OLLAMA_MODEL,
@@ -148,7 +169,7 @@ async def chat_with_environment(
     try:
         async with httpx.AsyncClient(timeout=30.0, trust_env=False) as client:
             response = await client.post(OLLAMA_API_URL, json=payload)
-            print("res:-----"+response.text)
+            print("-------------res:------------"+response.text)
             response.raise_for_status()
     except httpx.HTTPStatusError as error:
         detail = error.response.text.strip() or str(error)
@@ -207,7 +228,7 @@ async def analyze_environment(
     try:
         async with httpx.AsyncClient(timeout=30.0, trust_env=False) as client:
             response = await client.post(OLLAMA_API_URL, json=payload)
-            print("res:-----"+response.text)
+            print("-------------res:------------"+response.text)
             response.raise_for_status()
     except httpx.HTTPStatusError as error:
         detail = error.response.text.strip() or str(error)
@@ -283,25 +304,6 @@ def query_goods(货架号: str | None = None, 商品名: str | None = None):
     cur.close()
     conn.close()
     return {"code":0, "data":result}
-
-# 4. 检索函数：输入查询文本，返回topN相关知识库片段
-def retrieve_knowledge(query: str, top_k=2) -> str:
-    docs = vector_db.similarity_search(query, k=top_k)
-    context = "\n\n".join([f"【场景片段】{doc.page_content}" for doc in docs])
-    return context
-
-# 5. 组装Prompt，传给LLaVA
-def build_llava_prompt(user_input: str, image_desc: str):
-    knowledge_context = retrieve_knowledge(user_input)
-    prompt = f"""
-下面是参考知识库规则：
-{knowledge_context}
-
-根据上面的规则，分析图片信息：{image_desc}
-输出简短结论，判断环境是否存在风险，并给出对应的整改建议。
-要求：简洁直接，不要多余描述。
-"""
-    return prompt
 
 if __name__ == "__main__":
     test_prompt = build_llava_prompt("检测地下密闭空间CO浓度", "图片显示环境监测面板，CO读数800ppm")
