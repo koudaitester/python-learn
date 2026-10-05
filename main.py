@@ -18,6 +18,8 @@ from langchain_huggingface import HuggingFaceEmbeddings
 from langchain_chroma import Chroma
 import os
 
+import whisper
+
 app = FastAPI()
 OLLAMA_API_URL = os.getenv("OLLAMA_API_URL", "http://127.0.0.1:11434/api/generate")
 OLLAMA_MODEL = os.getenv("OLLAMA_MODEL", "llava")
@@ -28,6 +30,9 @@ MD_FILE_PATH = "./md/environment_check_scenes.md"  # 你的知识库md文件
 PERSIST_DIR = "./chroma_db"
 EMBED_MODEL_NAME = "all-MiniLM-L6-v2"  # 轻量本地嵌入模型，速度快
 # -----------------------------------------------------
+
+# 加载模型，选base足够原型使用，速度快
+whisper_model = whisper.load_model("base")
 
 # dify知识库配置
 # DIFY_API_KEY = "你的Dify知识库检索key"
@@ -60,6 +65,11 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# 4. 音频转文字
+def audio2text(audio_file_path:str):
+    result = whisper_model.transcribe(audio_file_path, language="zh")
+    return result["text"]
 
 @app.get("/", include_in_schema=False)
 def camera_page():
@@ -107,14 +117,59 @@ def retrieve_knowledge(query: str, top_k=2) -> str:
 def build_llava_prompt(user_input: str, image_desc: str):
     knowledge_context = retrieve_knowledge(user_input)
     prompt = f"""
-下面是参考知识库规则：
-{knowledge_context}
+        下面是参考知识库规则：
+        {knowledge_context}
 
-根据上面的规则，分析图片信息：{image_desc}
-输出简短结论，判断环境是否存在风险，并给出对应的整改建议。
-要求：简洁直接，不要多余描述。
-"""
+        根据上面的规则，分析图片信息：{image_desc}
+        输出简短结论，判断环境是否存在风险，并给出对应的整改建议。
+        要求：简洁直接，不要多余描述。
+        """
     return prompt
+
+# 新增：音频转写函数
+def audio_to_text(audio_file_path: str) -> str:
+    result = whisper_model.transcribe(audio_file_path, language="zh", fp16=False)
+    return result["text"].strip()
+
+# 新增接口：上传音频，返回转写文本
+@app.post("/audio_transcribe")
+async def audio_transcribe(file: UploadFile = File(...)):
+    # 临时保存音频文件
+    temp_audio_path = "./temp_audio.wav"
+    with open(temp_audio_path, "wb") as f:
+        f.write(await file.read())
+    try:
+        text = audio_to_text(temp_audio_path)
+        return {"transcribe_text": text}
+    except Exception as e:
+        return {"transcribe_text": "", "error": f"语音识别失败：{str(e)}"}
+    finally:
+        # 清理临时音频
+        if os.path.exists(temp_audio_path):
+            os.remove(temp_audio_path)
+
+# 新增接口：【语音+图片】联合分析接口
+@app.post("/audio_env_analyse")
+async def audio_env_analyse(image_base64: str, audio_file: UploadFile = File(...)):
+    # 1. 音频转文字
+    temp_audio_path = "./temp_audio.wav"
+    with open(temp_audio_path, "wb") as f:
+        f.write(await audio_file.read())
+    try:
+        user_query = audio_to_text(temp_audio_path)
+        # 2. 转写文本作为query，走RAG+LLaVA链路
+        prompt = build_llava_prompt(user_query, image_base64)
+        llava_result = call_llava(prompt, image_base64)
+        return {
+            "voice_text": user_query,
+            "result": llava_result,
+            "prompt": prompt
+        }
+    except Exception as e:
+        return {"error": f"处理失败：{str(e)}"}
+    finally:
+        if os.path.exists(temp_audio_path):
+            os.remove(temp_audio_path)
 
 @app.post("/chat_with_env")
 async def chat_with_environment(
