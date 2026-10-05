@@ -3,6 +3,7 @@ import math
 import os
 from pathlib import Path
 import requests
+import json
 
 import httpx
 from fastapi import FastAPI, File, Form, HTTPException, UploadFile
@@ -19,6 +20,11 @@ from langchain_chroma import Chroma
 import os
 
 import whisper
+
+import asyncio
+import edge_tts
+
+from service.tts_service import tts_service
 
 app = FastAPI()
 OLLAMA_API_URL = os.getenv("OLLAMA_API_URL", "http://127.0.0.1:11434/api/generate")
@@ -37,6 +43,15 @@ whisper_model = whisper.load_model("base")
 # dify知识库配置
 # DIFY_API_KEY = "你的Dify知识库检索key"
 # DIFY_RETRIEVE_URL = "http://localhost/v1/retrieval"
+
+class TextQueryRequest(BaseModel):
+    user_text: str
+
+class TextQueryResponse(BaseModel):
+    user_text: str
+    knowledge_context: str
+    llava_result: str
+    audio_url: str
 
 # 1. 加载并切分MD文档（按标题切分，适合场景知识库）
 loader = TextLoader(MD_FILE_PATH, encoding="utf-8")
@@ -75,6 +90,30 @@ def audio2text(audio_file_path:str):
 def camera_page():
     return FileResponse(Path(__file__).with_name("camera.html"))
 
+# 原有LLaVA调用函数
+async def call_llava(prompt: str, image_base64: str|None = None):
+    payload = {
+        "model": OLLAMA_MODEL,
+        "prompt": prompt,
+        "images": [image_base64],
+        "stream": False,
+        "options": {"timeout": 30000}
+    }
+    if image_base64 is not None:
+        payload["images"] = [image_base64]
+    # 用异步AsyncClient
+    async with httpx.AsyncClient() as client:
+        try:
+            resp = await client.post(OLLAMA_API_URL, json=payload, timeout=30.0)
+            print("status_code:", resp.status_code)
+            print("raw response text:", repr(resp.text))
+            data = resp.json()
+            return data["response"]
+        except json.JSONDecodeError:
+            # ollama进程崩溃返回非JSON，直接返回提示文本交给TTS播报
+            return "模型加载失败，Ollama模型进程意外终止。"
+        except Exception as e:
+            return f"调用模型异常：{str(e)}"
 
 def parse_sensor_value(name: str, value: str) -> float | None:
     if not value.strip():
@@ -114,7 +153,7 @@ def retrieve_knowledge(query: str, top_k=2) -> str:
     return context
 
 # 5. 组装Prompt，传给LLaVA
-def build_llava_prompt(user_input: str, image_desc: str):
+def build_llava_prompt(user_input: str, image_desc: str|None = None):
     knowledge_context = retrieve_knowledge(user_input)
     prompt = f"""
         下面是参考知识库规则：
@@ -159,7 +198,7 @@ async def audio_env_analyse(image_base64: str, audio_file: UploadFile = File(...
         user_query = audio_to_text(temp_audio_path)
         # 2. 转写文本作为query，走RAG+LLaVA链路
         prompt = build_llava_prompt(user_query, image_base64)
-        llava_result = call_llava(prompt, image_base64)
+        llava_result = await call_llava(prompt, image_base64)
         return {
             "voice_text": user_query,
             "result": llava_result,
@@ -360,9 +399,44 @@ def query_goods(货架号: str | None = None, 商品名: str | None = None):
     conn.close()
     return {"code":0, "data":result}
 
+@app.post("/api/text/query_with_tts", response_model=TextQueryResponse)
+async def text_query_with_tts(req: TextQueryRequest):
+    # 业务逻辑一行一行调用service，主文件干净
+    knowledge_context = build_llava_prompt(req.user_text)
+    prompt = f"""参考知识库规则：
+        {knowledge_context}
+        用户问题：{req.user_text}
+        请结合规则给出简短判断。
+        """
+    llava_result = await call_llava(prompt, None)
+    await tts_service.text_to_speech(llava_result) # type: ignore
+    return {
+        "user_text": req.user_text,
+        "knowledge_context": knowledge_context,
+        "llava_result": llava_result,
+        "audio_url": "/api/text/get_audio"
+    }
+    # knowledge_context = "测试知识库内容"
+    # llava_result = "测试播报文本，地下腔体环境正常"
+    # await tts_service.text_to_speech(llava_result)
+
+    # return {
+    #     "user_text": req.user_text,
+    #     "knowledge_context": knowledge_context,
+    #     "llava_result": llava_result,
+    #     "audio_url": "/api/text/get_audio"
+    # }
+
+@app.get("/api/text/get_audio")
+async def get_audio():
+    return FileResponse("./tmp/reply.mp3", media_type="audio/mpeg")
+
+# async def main():
+#     res_path = await tts_service.text_to_speech("测试播报，环境检测正常")
+#     print(f"音频生成成功，路径：{res_path}")
+
 if __name__ == "__main__":
-    test_prompt = build_llava_prompt("检测地下密闭空间CO浓度", "图片显示环境监测面板，CO读数800ppm")
-    print(test_prompt)
     import uvicorn
     # host改成0.0.0.0
     uvicorn.run("main:app", host="0.0.0.0", port=6100, reload=True)
+    # asyncio.run(main())

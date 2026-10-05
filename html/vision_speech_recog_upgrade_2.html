@@ -63,6 +63,19 @@ setTimeout(startLoop, INTERVAL_MS);
 }
 }
 
+async function sendTextQuery(text) {
+  const res = await fetch("/api/text/query_with_tts", {
+    method: "POST",
+    headers: {"Content-Type": "application/json"},
+    body: JSON.stringify({user_text: text})
+  });
+  const data = await res.json();
+  console.log("LLaVA返回：", data.llava_result);
+  const audio = new Audio(data.audio_url);
+  audio.play();
+}
+
+
 // ========== 图片压缩函数，长边640，质量0.4 ==========
 async function captureFrameBlob(){
 const maxSide = 640;
