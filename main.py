@@ -25,6 +25,7 @@ import asyncio
 import edge_tts
 
 from service.tts_service import tts_service
+from service.rag_service import retrieve_knowledge, build_llava_prompt
 
 app = FastAPI()
 OLLAMA_API_URL = os.getenv("OLLAMA_API_URL", "http://127.0.0.1:11434/api/generate")
@@ -145,25 +146,6 @@ def parse_sensor_value(name: str, value: str) -> float | None:
 #     # 取出Dify工作流最终输出
 #     result_text = data["data"]["outputs"]["answer"]
 #     return result_text
-
-# 4. 检索函数：输入查询文本，返回topN相关知识库片段
-def retrieve_knowledge(query: str, top_k=2) -> str:
-    docs = vector_db.similarity_search(query, k=top_k)
-    context = "\n\n".join([f"【场景片段】{doc.page_content}" for doc in docs])
-    return context
-
-# 5. 组装Prompt，传给LLaVA
-def build_llava_prompt(user_input: str, image_desc: str|None = None):
-    knowledge_context = retrieve_knowledge(user_input)
-    prompt = f"""
-        下面是参考知识库规则：
-        {knowledge_context}
-
-        根据上面的规则，分析图片信息：{image_desc}
-        输出简短结论，判断环境是否存在风险，并给出对应的整改建议。
-        要求：简洁直接，不要多余描述。
-        """
-    return prompt
 
 # 新增：音频转写函数
 def audio_to_text(audio_file_path: str) -> str:
