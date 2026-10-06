@@ -24,7 +24,7 @@ import whisper
 import asyncio
 import edge_tts
 
-from services.tts_service import tts_service
+from services.tts_service import text_to_speech 
 from services.rag_service import retrieve_knowledge, build_llava_prompt
 from services.ollama_service import call_llava
 
@@ -46,14 +46,14 @@ whisper_model = whisper.load_model("base")
 # DIFY_API_KEY = "你的Dify知识库检索key"
 # DIFY_RETRIEVE_URL = "http://localhost/v1/retrieval"
 
-class TextQueryRequest(BaseModel):
-    user_text: str
+# class TextQueryRequest(BaseModel):
+#     user_text: str
 
-class TextQueryResponse(BaseModel):
-    user_text: str
-    knowledge_context: str
-    llava_result: str
-    audio_url: str
+# class TextQueryResponse(BaseModel):
+#     user_text: str
+#     knowledge_context: str
+#     llava_result: str
+#     audio_url: str
 
 # 1. 加载并切分MD文档（按标题切分，适合场景知识库）
 loader = TextLoader(MD_FILE_PATH, encoding="utf-8")
@@ -360,13 +360,13 @@ async def text_query_with_tts(req: TextQueryRequest):
         用户问题：{req.user_text}
         请结合规则给出简短判断。
         """
-    llava_result = await call_llava(prompt, None)
-    await tts_service.text_to_speech(llava_result) # type: ignore
+    llava_result = call_llava(prompt, None)
+    audio_path = text_to_speech(llava_result) # type: ignore
     return {
         "user_text": req.user_text,
         "knowledge_context": knowledge_context,
         "llava_result": llava_result,
-        "audio_url": "/api/text/get_audio"
+        "audio_url": audio_path
     }
     # knowledge_context = "测试知识库内容"
     # llava_result = "测试播报文本，地下腔体环境正常"
