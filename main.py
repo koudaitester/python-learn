@@ -145,28 +145,7 @@ async def audio_transcribe(file: UploadFile = File(...)):
         if os.path.exists(temp_audio_path):
             os.remove(temp_audio_path)
 
-# 新增接口：【语音+图片】联合分析接口
-@app.post("/audio_env_analyse")
-async def audio_env_analyse(image_base64: str, audio_file: UploadFile = File(...)):
-    # 1. 音频转文字
-    temp_audio_path = "./temp_audio.wav"
-    with open(temp_audio_path, "wb") as f:
-        f.write(await audio_file.read())
-    try:
-        user_query = audio_to_text(temp_audio_path)
-        # 2. 转写文本作为query，走RAG+LLaVA链路
-        prompt = build_llava_prompt(user_query, image_base64)
-        llava_result = await call_llava(prompt, image_base64)
-        return {
-            "voice_text": user_query,
-            "result": llava_result,
-            "prompt": prompt
-        }
-    except Exception as e:
-        return {"error": f"处理失败：{str(e)}"}
-    finally:
-        if os.path.exists(temp_audio_path):
-            os.remove(temp_audio_path)
+
 
 @app.post("/chat_with_env")
 async def chat_with_environment(
@@ -351,33 +330,40 @@ def query_goods(货架号: str | None = None, 商品名: str | None = None):
     conn.close()
     return {"code":0, "data":result}
 
-@app.post("/api/text/query_with_tts", response_model=TextQueryResponse)
-async def text_query_with_tts(req: TextQueryRequest):
-    # 业务逻辑一行一行调用service，主文件干净
-    knowledge_context = build_llava_prompt(req.user_text)
-    prompt = f"""参考知识库规则：
-        {knowledge_context}
-        用户问题：{req.user_text}
-        请结合规则给出简短判断。
-        """
-    llava_result = call_llava(prompt, None)
-    audio_path = text_to_speech(llava_result) # type: ignore
-    return {
-        "user_text": req.user_text,
-        "knowledge_context": knowledge_context,
-        "llava_result": llava_result,
-        "audio_url": audio_path
-    }
-    # knowledge_context = "测试知识库内容"
-    # llava_result = "测试播报文本，地下腔体环境正常"
-    # await tts_service.text_to_speech(llava_result)
 
-    # return {
-    #     "user_text": req.user_text,
-    #     "knowledge_context": knowledge_context,
-    #     "llava_result": llava_result,
-    #     "audio_url": "/api/text/get_audio"
-    # }
+@app.post("/query_knowledge_tts")
+async def query_knowledge_tts(
+    user_text: str = Form(...),          # 新增：用户提问文本
+    temperature: str = Form(...),        # 原有
+    humidity: str = Form(...),           # 原有
+    image: UploadFile | None = None      # 原有图片上传
+):
+    # 1、RAG检索知识库，把用户问题、温湿度环境信息一起塞进去
+    knowledge_context = retrieve_knowledge(user_text)
+    full_prompt = f"""
+    {knowledge_context}
+    环境参数：温度：{temperature}，湿度：{humidity}
+    用户问题：{user_text}
+    简短回答，不超过30个字。
+    """
+
+    # 2、图片base64处理，如果前端传了图片，转base64；没有就是None
+    image_b64 = None
+    if image is not None:
+        import base64
+        img_bytes = await image.read()
+        image_b64 = base64.b64encode(img_bytes).decode("utf-8")
+
+    # 3、调用LLaVA（同步函数，to_thread包装）
+    llm_text = await asyncio.to_thread(call_llava, full_prompt, image_b64)
+
+    # 4、TTS生成音频
+    audio_path = await text_to_speech(llm_text)
+
+    return {
+        "result_text": llm_text,
+        "audio_file": audio_path
+    }
 
 @app.get("/api/text/get_audio")
 async def get_audio():
