@@ -1,0 +1,3 @@
+2026-10-07 15:02:58,255 | INFO | global_app | 测试INFO日志
+2026-10-07 15:02:58,255 | WARNING | global_app | 测试WARN日志
+2026-10-07 15:02:58,255 | ERROR | global_app | 测试ERROR日志
