@@ -27,6 +27,7 @@ import edge_tts
 from services.tts_service import text_to_speech 
 from services.rag_service import retrieve_knowledge, build_llava_prompt
 from services.ollama_service import call_llava
+from services.chat_history_service import create_session, append_msg, get_history
 
 app = FastAPI()
 OLLAMA_API_URL = os.getenv("OLLAMA_API_URL", "http://127.0.0.1:11434/api/generate")
@@ -372,6 +373,32 @@ async def get_audio():
 # async def main():
 #     res_path = await tts_service.text_to_speech("测试播报，环境检测正常")
 #     print(f"音频生成成功，路径：{res_path}")
+
+def build_prompt_with_history(history, new_query):
+    prompt_parts = ["下面是本次对话历史："]
+    for msg in history:
+        prompt_parts.append(f"{msg.role}: {msg.content}")
+    prompt_parts.append(f"用户新问题：{new_query}")
+    prompt_parts.append("请基于对话历史回答用户问题。")
+    return "\n".join(prompt_parts)
+
+@app.post("/chat")
+async def chat(query: str, session_id: str = None):
+    # 无会话则新建
+    if not session_id:
+        session_id = create_session()
+    
+    # 1. 读取历史
+    history = get_history(session_id)
+    # 2. 拼接历史 + 当前query，一起送入RAG+Ollama
+    prompt = build_prompt_with_history(history, query)
+    # 3. 调用原有服务
+    resp_text =call_llava(prompt)
+    # 4. 存入记录
+    append_msg(session_id, "user", query)
+    append_msg(session_id, "assistant", resp_text)
+    
+    return {"session_id": session_id, "reply": resp_text}
 
 if __name__ == "__main__":
     import uvicorn

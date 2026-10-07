@@ -4,7 +4,7 @@ import json
 OLLAMA_API_URL = "http://localhost:11434/api/generate"
 OLLAMA_MODEL = "llava"
 
-def call_llava(prompt: str, image_base64: str | None):
+def call_llava(prompt: str, image_base64: str | None = None):
     payload = {
         "model": OLLAMA_MODEL,
         "prompt": prompt,
