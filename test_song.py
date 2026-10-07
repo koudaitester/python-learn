@@ -1,5 +1,5 @@
 from services.song_service import song_generator
-from services.audio_service import generate_audio
+from services.audio_generator_service import generate_audio
 
 if __name__ == "__main__":
     # 测试用例
