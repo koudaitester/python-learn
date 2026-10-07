@@ -28,6 +28,7 @@ from services.tts_service import text_to_speech
 from services.rag_service import retrieve_knowledge, build_llava_prompt
 from services.ollama_service import call_llava
 from services.chat_history_service import create_session, append_msg, get_history
+from services.md_upload_service import check_md_file, save_md_file
 
 app = FastAPI()
 OLLAMA_API_URL = os.getenv("OLLAMA_API_URL", "http://127.0.0.1:11434/api/generate")
@@ -399,6 +400,12 @@ async def chat(query: str, session_id: str = None):
     append_msg(session_id, "assistant", resp_text)
     
     return {"session_id": session_id, "reply": resp_text}
+
+@app.post("/api/upload/md")
+async def upload_md(file: UploadFile = File(...)):
+    content = await file.read()
+    res = save_md_file(content, file.filename)
+    return {"code":0, "msg":"success", "data":res}
 
 if __name__ == "__main__":
     import uvicorn
