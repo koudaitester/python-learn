@@ -1,10 +1,12 @@
 import requests
 import time
 import json
+import shutil
+import re
 
 BASE_URL = "http://127.0.0.1:8001"
 
-def submit_music_task(prompt: str, lyrics: str, lm_temperature=0.85, lm_cfg_scale=2.5):
+def submit_music_task(prompt: str, lyrics: str, lm_temperature: float, lm_cfg_scale: float):
     resp = requests.post(f"{BASE_URL}/release_task", json={
         "prompt": prompt,
         "lyrics": lyrics,
@@ -16,7 +18,7 @@ def submit_music_task(prompt: str, lyrics: str, lm_temperature=0.85, lm_cfg_scal
     print(f"✅ 已提交音乐任务，task_id = {task_id}")
     return task_id
 
-def poll_task_result(task_id: str, interval=3):
+def poll_task_result(task_id: str, interval=20):
     print(f"🔍 开始轮询任务状态，task_id = {task_id}")
     while True:
         resp = requests.post(f"{BASE_URL}/query_result", json={"task_id_list": [task_id]})
@@ -41,4 +43,17 @@ def download_audio(file_path: str, save_name="output.mp3"):
     with open(save_name, "wb") as f:
         f.write(resp.content)
     print(f"✅ 音频下载完成，本地文件：{save_name}")
+    return save_name
+
+def copy_audio_directly(file_path: str, save_name="output.mp3"):
+    print(f"📂 原始返回字段: {file_path}")
+    # 提取path=后面的本地磁盘路径
+    match = re.search(r"path=(.+)", file_path)
+    if match:
+        source_path = match.group(1)
+    else:
+        source_path = file_path
+    print(f"📂 源文件路径: {source_path}")
+    shutil.copy(source_path, save_name)
+    print(f"✅ 文件拷贝完成，本地音频：{save_name}")
     return save_name

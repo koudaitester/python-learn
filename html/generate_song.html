@@ -25,12 +25,15 @@
         async function submitTask(){
             const msgDom = document.getElementById("msg");
             msgDom.innerText = "提交任务中...";
-            const resp = await fetch("http://127.0.0.1:8000/api/generate_music", {
+            const resp = await fetch("http://127.0.0.1:8001/release_task", {
                 method:"POST",
                 headers:{"Content-Type":"application/json"},
                 body:JSON.stringify({
                     prompt: document.getElementById("prompt").value,
-                    lyrics: document.getElementById("lyrics").value
+                    lyrics: document.getElementById("lyrics").value,
+                    "thinking": True,
+                    "lm_temperature": 0.8,
+                    "lm_cfg_scale": 2.2
                 })
             })
             const data = await resp.json();

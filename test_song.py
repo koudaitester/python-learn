@@ -1,19 +1,58 @@
 from services.song_service import song_generator
-from services.audio_generator_service import submit_music_task, poll_task_result, download_audio
-from services.audio_generator_service import submit_music_task, poll_task_result, download_audio
+from services.audio_generator_service import copy_audio_directly, submit_music_task, poll_task_result, download_audio
 
 if __name__ == "__main__":
-    prompt = "Chinese wuxia style, male vocal, solemn and powerful, ancient Chinese instrumental arrangement. Main instruments: pipa, guzheng, xun, shakuhachi, bamboo flute, morin khuur. The story is about Yip Man, calm and resolute martial arts master, carrying national spirit, not aggressive, steady and deep. No noisy electronic sounds."
-    lyrics = """孤灯照木梁
-拳藏岁月长
-一身承家国
-静立御风霜
+    prompt = """Chinese martial arts song, male vocal, clear intelligible vocals.
+Song structure: calm intro, gradually build up, strong fast-paced climax chorus, obvious rhythm contrast.
+Instrumentation: guzheng, pipa, erhu, Chinese drum, bamboo flute.
+Story background: Bruce Lee, founder of Jeet Kune Do, inch punch, no-limits combat philosophy. Cross-cultural kung fu icon, spread Chinese martial arts to the world, break cultural barriers.
+Mood: verse is calm and thoughtful, chorus powerful, energetic, punchy rhythm. No electronic music.
+"""
+    lyrics = """【主歌1】
+海面起长风
+拳藏万象中
+不困门派笼
+破尽旧樊笼
 
-寸劲破虚妄
-风骨未曾忘
-平凡布衣客
-丹心护故乡"""
-    tid = submit_music_task(prompt, lyrics, lm_temperature=0.8, lm_cfg_scale=2.2)
+寸劲一瞬涌
+动静自相通
+武道非争勇
+心与天地同
+
+【副歌】
+截拳破虚锋
+一念定苍穹
+以武载大道
+四海识龙踪
+
+鼓震山河动
+傲骨贯长虹
+身传华夏意
+万里振雄风
+
+【主歌2】
+银幕展真容
+风骨映苍穹
+打破东西隔
+武道入寰中
+
+不拘招式重
+顺势化千攻
+平生持正念
+侠气贯始终
+
+【副歌】
+截拳破虚锋
+一念定苍穹
+以武载大道
+四海识龙踪
+
+鼓震山河动
+傲骨贯长虹
+身传华夏意
+万里振雄风
+"""
+    tid = submit_music_task(prompt, lyrics, lm_temperature=0.75, lm_cfg_scale=2.4)
     result = poll_task_result(tid)
     audio_path = result["file"]
-    download_audio(audio_path, "./tmp/song_audio/"+tid+".mp3")
+    copy_audio_directly(audio_path, "./tmp/song_audio/" + tid + ".mp3")
