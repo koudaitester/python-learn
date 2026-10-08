@@ -1,0 +1,11 @@
+{
+  "servers": {
+    "promptflow": {
+      "type": "stdio",
+      "command": "node",
+      "args": [
+        "/Users/mac/.vscode/extensions/promptflow-ai.ide-extension-1.5.2/dist/mcp-server.js"
+      ]
+    }
+  }
+}

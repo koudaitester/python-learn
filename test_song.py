@@ -1,58 +1,59 @@
 from services.song_service import song_generator
-from services.audio_generator_service import copy_audio_directly, submit_music_task, poll_task_result, download_audio
+from services.audio_generator_service import submit_music_task, poll_task_result, download_audio
 
 if __name__ == "__main__":
-    prompt = """Chinese martial arts song, male vocal, clear intelligible vocals.
-Song structure: calm intro, gradually build up, strong fast-paced climax chorus, obvious rhythm contrast.
-Instrumentation: guzheng, pipa, erhu, Chinese drum, bamboo flute.
-Story background: Bruce Lee, founder of Jeet Kune Do, inch punch, no-limits combat philosophy. Cross-cultural kung fu icon, spread Chinese martial arts to the world, break cultural barriers.
-Mood: verse is calm and thoughtful, chorus powerful, energetic, punchy rhythm. No electronic music.
+    prompt = """Chinese epic ancient ballad, deep male vocal, traditional opera old-sheng tone, singing like reciting ancient poetry.
+BPM 72, slow and solemn tempo.
+Structure: quiet narrative verse, slowly rising into grand sweeping chorus.
+Instrumentation: guzheng, pipa, erhu, large Chinese drum, stone chime.
+Story background: Guan Yu of Three Kingdoms. Reads Zuo Zhuan by candlelight, bone scraping therapy, loyalty and righteousness, crossing five passes and slaying six generals, beheading Yan Liang. Turbulent Three Kingdoms era, the noble integrity of heroes.
+Mood: vicissitudes, solemn, majestic, like Ode to the Red Cliff. No pop singing style, no electronic sounds.
 """
     lyrics = """【主歌1】
-海面起长风
-拳藏万象中
-不困门派笼
-破尽旧樊笼
+青烛照简编
+夜读左传篇
+偃月横寒刃
+乱世立忠坚
 
-寸劲一瞬涌
-动静自相通
-武道非争勇
-心与天地同
+刮骨谈笑间
+豪气撼云天
+千里寻兄路
+五关斩六贤
 
 【副歌】
-截拳破虚锋
-一念定苍穹
-以武载大道
-四海识龙踪
+丹心如日月
+义薄贯长天
+横刀临万阵
+武圣震尘寰
 
-鼓震山河动
-傲骨贯长虹
-身传华夏意
-万里振雄风
+烽烟分汉土
+铁血铸忠言
+千秋存傲骨
+浩气满河山
 
 【主歌2】
-银幕展真容
-风骨映苍穹
-打破东西隔
-武道入寰中
+白马破狼烟
+一骑斩颜良
+丹心无移改
+生死守盟言
 
-不拘招式重
-顺势化千攻
-平生持正念
-侠气贯始终
+鼎足三分地
+英雄竞挥鞭
+千秋仰高义
+青史姓名传
 
 【副歌】
-截拳破虚锋
-一念定苍穹
-以武载大道
-四海识龙踪
+丹心如日月
+义薄贯长天
+横刀临万阵
+武圣震尘寰
 
-鼓震山河动
-傲骨贯长虹
-身传华夏意
-万里振雄风
+烽烟分汉土
+铁血铸忠言
+千秋存傲骨
+浩气满河山
 """
     tid = submit_music_task(prompt, lyrics, lm_temperature=0.75, lm_cfg_scale=2.4)
     result = poll_task_result(tid)
     audio_path = result["file"]
-    copy_audio_directly(audio_path, "./tmp/song_audio/" + tid + ".mp3")
+    download_audio(audio_path, "./tmp/song_audio/" + tid + ".mp3")

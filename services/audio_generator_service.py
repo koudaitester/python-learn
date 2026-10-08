@@ -38,22 +38,19 @@ def poll_task_result(task_id: str, interval=20):
         time.sleep(interval)
 
 def download_audio(file_path: str, save_name="output.mp3"):
-    print(f"📥 准备下载音频，远端路径：{file_path}，本地保存名：{save_name}")
-    resp = requests.get(f"{BASE_URL}/v1/audio", params={"path": file_path})
+    print(f"📥 原始返回字段：{file_path}")
+    if file_path.startswith("/v1/audio"):
+        # 重点：已经是完整带?path的相对地址，直接拼接BASE_URL，不要再加params！
+        full_url = f"{BASE_URL}{file_path}"
+        resp = requests.get(full_url)
+    else:
+        # 如果返回的是纯本地磁盘路径，才走params传递
+        resp = requests.get(f"{BASE_URL}/v1/audio", params={"path": file_path})
+
+    if resp.status_code != 200:
+        raise Exception(f"❌ 音频接口请求失败，status={resp.status_code}, 响应：{resp.text}")
+
     with open(save_name, "wb") as f:
         f.write(resp.content)
     print(f"✅ 音频下载完成，本地文件：{save_name}")
-    return save_name
-
-def copy_audio_directly(file_path: str, save_name="output.mp3"):
-    print(f"📂 原始返回字段: {file_path}")
-    # 提取path=后面的本地磁盘路径
-    match = re.search(r"path=(.+)", file_path)
-    if match:
-        source_path = match.group(1)
-    else:
-        source_path = file_path
-    print(f"📂 源文件路径: {source_path}")
-    shutil.copy(source_path, save_name)
-    print(f"✅ 文件拷贝完成，本地音频：{save_name}")
     return save_name
