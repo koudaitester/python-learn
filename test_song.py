@@ -16,4 +16,4 @@ if __name__ == "__main__":
     tid = submit_music_task(prompt, lyrics, lm_temperature=0.8, lm_cfg_scale=2.2)
     result = poll_task_result(tid)
     audio_path = result["file"]
-    download_audio(audio_path, "yipman_wuxia.mp3")
+    download_audio(audio_path, "./tmp/song_audio/"+tid+".mp3")
