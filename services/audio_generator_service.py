@@ -1,39 +1,44 @@
-import os
+import requests
 import time
-import uuid
+import json
 
-# 音频输出根目录
-AUDIO_OUTPUT_DIR = "./tmp/song_audio"
+BASE_URL = "http://127.0.0.1:8001"
 
-def init_audio_dir():
-    """初始化音频存储目录，不存在则创建"""
-    if not os.path.exists(AUDIO_OUTPUT_DIR):
-        os.makedirs(AUDIO_OUTPUT_DIR)
+def submit_music_task(prompt: str, lyrics: str, lm_temperature=0.85, lm_cfg_scale=2.5):
+    resp = requests.post(f"{BASE_URL}/release_task", json={
+        "prompt": prompt,
+        "lyrics": lyrics,
+        "thinking": True,
+        "lm_temperature": lm_temperature,
+        "lm_cfg_scale": lm_cfg_scale
+    })
+    task_id = resp.json()["data"]["task_id"]
+    print(f"✅ 已提交音乐任务，task_id = {task_id}")
+    return task_id
 
-def generate_audio_filename(song_title: str) -> str:
-    """
-    生成安全的音频文件名
-    格式：{歌曲名}_{时间戳}_{唯一id}.wav
-    """
-    # 清洗文件名，去除非法字符
-    safe_title = "".join(c for c in song_title if c.isalnum() or c in (" ", "_")).strip()
-    timestamp = int(time.time())
-    short_id = str(uuid.uuid4())[:8]
-    filename = f"{safe_title}_{timestamp}_{short_id}.wav"
-    return os.path.join(AUDIO_OUTPUT_DIR, filename)
+def poll_task_result(task_id: str, interval=3):
+    print(f"🔍 开始轮询任务状态，task_id = {task_id}")
+    while True:
+        resp = requests.post(f"{BASE_URL}/query_result", json={"task_id_list": [task_id]})
+        outer_data = resp.json()["data"][0]
+        result_list = json.loads(outer_data["result"])
+        res = result_list[0]
 
-def generate_audio(song_prompt: str, song_title: str):
-    """
-    预留音频生成接口
-    这里后续接入音频生成模型API/本地音乐模型
-    返回生成好的音频文件完整路径
-    """
-    init_audio_dir()
-    full_path = generate_audio_filename(song_title)
-    
-    # ========== 这里是预留占位 ==========
-    # 后续在这里调用音乐生成模型，输出音频写入 full_path
-    # 示例：music_model.generate(prompt=song_prompt, save_path=full_path)
-    # =====================================
-    print(f"【占位】音频将保存至：{full_path}")
-    return full_path
+        progress = res["progress"]
+        stage = res["stage"]
+        print(f"📊 task_id:{task_id} | 进度：{progress:.2f} | 阶段：{stage}")
+
+        if res["status"] == 1:
+            print(f"🎉 任务完成！获取音频文件路径：{res['file']}")
+            return res
+        elif res["status"] == -1:
+            raise Exception(f"❌ 任务失败：{res}")
+        time.sleep(interval)
+
+def download_audio(file_path: str, save_name="output.mp3"):
+    print(f"📥 准备下载音频，远端路径：{file_path}，本地保存名：{save_name}")
+    resp = requests.get(f"{BASE_URL}/v1/audio", params={"path": file_path})
+    with open(save_name, "wb") as f:
+        f.write(resp.content)
+    print(f"✅ 音频下载完成，本地文件：{save_name}")
+    return save_name

@@ -1,0 +1,42 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <title>本地AI音乐生成</title>
+</head>
+<body>
+    <h2>ACE-Step 国风音乐生成器</h2>
+    <div>
+        <label>曲风/乐器Prompt：</label><br>
+        <textarea id="prompt" rows="4" cols="60">Chinese wuxia style, male vocal, pipa, guzheng, xun, bamboo flute</textarea>
+    </div>
+    <div>
+        <label>歌词：</label><br>
+        <textarea id="lyrics" rows="6" cols="60">孤灯照木梁
+拳藏岁月长
+一身承家国
+静立御风霜</textarea>
+    </div>
+    <button onclick="submitTask()">开始生成</button>
+    <div id="msg"></div>
+    <div id="player"></div>
+
+    <script>
+        async function submitTask(){
+            const msgDom = document.getElementById("msg");
+            msgDom.innerText = "提交任务中...";
+            const resp = await fetch("http://127.0.0.1:8000/api/generate_music", {
+                method:"POST",
+                headers:{"Content-Type":"application/json"},
+                body:JSON.stringify({
+                    prompt: document.getElementById("prompt").value,
+                    lyrics: document.getElementById("lyrics").value
+                })
+            })
+            const data = await resp.json();
+            msgDom.innerText = "生成完成";
+            document.getElementById("player").innerHTML = `<audio controls src="${data.audio_url}">`
+        }
+    </script>
+</body>
+</html>
