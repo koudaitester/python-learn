@@ -30,6 +30,9 @@ from services.ollama_service import call_llava
 from services.chat_history_service import create_session, append_msg, get_history
 from services.md_upload_service import check_md_file, save_md_file
 
+from fastapi import APIRouter
+from services.url_utils import url_decode, url_encode
+
 app = FastAPI()
 OLLAMA_API_URL = os.getenv("OLLAMA_API_URL", "http://127.0.0.1:11434/api/generate")
 OLLAMA_MODEL = os.getenv("OLLAMA_MODEL", "llava")
@@ -43,6 +46,8 @@ EMBED_MODEL_NAME = "all-MiniLM-L6-v2"  # 轻量本地嵌入模型，速度快
 
 # 加载模型，选base足够原型使用，速度快
 whisper_model = whisper.load_model("base")
+
+router = APIRouter(prefix="/url", tags=["URL工具"])
 
 # dify知识库配置
 # DIFY_API_KEY = "你的Dify知识库检索key"
@@ -406,6 +411,16 @@ async def upload_md(file: UploadFile = File(...)):
     content = await file.read()
     res = save_md_file(content, file.filename)
     return {"code":0, "msg":"success", "data":res}
+
+@router.post("/decode")
+def decode_url(text: str):
+    return {"result": url_decode(text)}
+
+@router.post("/encode")
+def encode_url(text: str):
+    return {"result": url_encode(text)}
+
+app.include_router(router)
 
 if __name__ == "__main__":
     import uvicorn
